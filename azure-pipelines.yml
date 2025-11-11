@@ -1,0 +1,47 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+# azure-pipelines.yml
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  zipName: 'site.zip'
+
+steps:
+- task: NodeTool@0
+  displayName: 'Install Node (for zip utility if needed)'
+  inputs:
+    versionSpec: '16.x'
+  # Node isn't required for a plain zip, but ensures cross-platform tools are available.
+
+- script: |
+    echo "Preparing artifact..."
+    mkdir -p $(Build.ArtifactStagingDirectory)/site
+    # Copy all files from the repo root except Azure Pipelines file and other dev files.
+    # Adjust the include/exclude commands below if your site files are in a subfolder (e.g., ./www)
+    rsync -av --exclude='.git' --exclude='.azure-pipelines.yml' --exclude='.gitignore' --exclude='.github' ./ $(Build.ArtifactStagingDirectory)/site/
+    cd $(Build.ArtifactStagingDirectory)
+    zip -r $(zipName) ./site/*
+  displayName: 'Package site into zip'
+
+- publish: $(Build.ArtifactStagingDirectory)/$(zipName)
+  artifact: drop
+  displayName: 'Publish artifact (site.zip)'
+
+- task: AzureWebApp@1
+  displayName: 'Deploy to Azure Web App (ZIP Deploy)'
+  inputs:
+    azureSubscription: '<SERVICE_CONNECTION_NAME>'
+    appName: '<YOUR_APP_SERVICE_NAME>'
+    package: '$(Build.ArtifactStagingDirectory)/$(zipName)'
+
